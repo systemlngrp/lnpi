@@ -6640,61 +6640,64 @@ const createHandlers = (tableName: string) => {
           if (orderId) {
             const [existingRows] = await db.query("SELECT * FROM `orders` WHERE id = ? LIMIT 1", [orderId]);
             const existingOrder = (existingRows as any[])[0];
-            if (!existingOrder) return res.status(404).json({ error: "Order not found." });
+            // Client-generated UUIDs are used for new orders. Only apply the
+            // edit checks when that UUID already exists in the database;
+            // otherwise the normal upsert below must insert the new order.
+            if (existingOrder) {
+              const comparableFields = [
+                "orderDate", "companyId", "poNumber", "erpCode", "itemId", "itemSource", "npdId",
+                "qty", "rate", "orderBy", "poType", "remarks",
+              ];
+              const normalizedValue = (value: unknown) => String(value ?? "").trim();
+              const numericFields = new Set(["qty", "rate"]);
+              const hasBusinessChange = comparableFields.some((field) => {
+                if (numericFields.has(field)) return Number(existingOrder[field] || 0) !== Number(data[field] || 0);
+                return normalizedValue(existingOrder[field]) !== normalizedValue(data[field]);
+              });
 
-            const comparableFields = [
-              "orderDate", "companyId", "poNumber", "erpCode", "itemId", "itemSource", "npdId",
-              "qty", "rate", "orderBy", "poType", "remarks",
-            ];
-            const normalizedValue = (value: unknown) => String(value ?? "").trim();
-            const numericFields = new Set(["qty", "rate"]);
-            const hasBusinessChange = comparableFields.some((field) => {
-              if (numericFields.has(field)) return Number(existingOrder[field] || 0) !== Number(data[field] || 0);
-              return normalizedValue(existingOrder[field]) !== normalizedValue(data[field]);
-            });
-
-            if (hasBusinessChange && !canEditOrders(requestUser)) {
-              return res.status(403).json({ error: "Only the authorized CFO user can edit order data." });
-            }
-
-            if (hasBusinessChange && canEditOrders(requestUser)) {
-              const itemChanged =
-                normalizedValue(existingOrder.itemId) !== normalizedValue(data.itemId) ||
-                normalizedValue(existingOrder.itemSource) !== normalizedValue(data.itemSource) ||
-                normalizedValue(existingOrder.npdId) !== normalizedValue(data.npdId);
-              const companyChanged = normalizedValue(existingOrder.companyId) !== normalizedValue(data.companyId);
-              const nextQty = Number(data.qty || 0);
-              if (!Number.isFinite(nextQty) || nextQty < 0) {
-                return res.status(400).json({ error: "Order quantity must be a valid non-negative number." });
+              if (hasBusinessChange && !canEditOrders(requestUser)) {
+                return res.status(403).json({ error: "Only the authorized CFO user can edit order data." });
               }
 
-              const [scheduleRows] = await db.query(
-                "SELECT COALESCE(SUM(GREATEST(COALESCE(qty, 0) - COALESCE(canceledQty, 0), 0)), 0) AS committedQty, COUNT(*) AS scheduleCount FROM `orders_schedule` WHERE orderId = ?",
-                [orderId]
-              );
-              const [productionRows] = await db.query(
-                "SELECT COUNT(*) AS count FROM `productions` p JOIN `orders_schedule` os ON os.id = p.scheduleId WHERE os.orderId = ?",
-                [orderId]
-              );
-              const [dispatchRows] = await db.query(
-                "SELECT COUNT(*) AS count FROM `dispatch_plans` dp LEFT JOIN `productions` p ON p.id = dp.productionId LEFT JOIN `orders_schedule` os ON os.id = p.scheduleId WHERE dp.orderId = ? OR os.orderId = ?",
-                [orderId, orderId]
-              );
-              const committedQty = Number((scheduleRows as any[])[0]?.committedQty || 0);
-              const hasLinkedActivity =
-                Number((scheduleRows as any[])[0]?.scheduleCount || 0) > 0 ||
-                Number((productionRows as any[])[0]?.count || 0) > 0 ||
-                Number((dispatchRows as any[])[0]?.count || 0) > 0;
+              if (hasBusinessChange && canEditOrders(requestUser)) {
+                const itemChanged =
+                  normalizedValue(existingOrder.itemId) !== normalizedValue(data.itemId) ||
+                  normalizedValue(existingOrder.itemSource) !== normalizedValue(data.itemSource) ||
+                  normalizedValue(existingOrder.npdId) !== normalizedValue(data.npdId);
+                const companyChanged = normalizedValue(existingOrder.companyId) !== normalizedValue(data.companyId);
+                const nextQty = Number(data.qty || 0);
+                if (!Number.isFinite(nextQty) || nextQty < 0) {
+                  return res.status(400).json({ error: "Order quantity must be a valid non-negative number." });
+                }
 
-              if ((itemChanged || companyChanged) && hasLinkedActivity) {
-                return res.status(409).json({
-                  error: "Item or company cannot be changed after this order has downstream scheduled, produced, or dispatched activity.",
-                });
-              }
-              if (nextQty < committedQty) {
-                return res.status(409).json({
-                  error: `Order quantity cannot be reduced below committed quantity (${committedQty}).`,
-                });
+                const [scheduleRows] = await db.query(
+                  "SELECT COALESCE(SUM(GREATEST(COALESCE(qty, 0) - COALESCE(canceledQty, 0), 0)), 0) AS committedQty, COUNT(*) AS scheduleCount FROM `orders_schedule` WHERE orderId = ?",
+                  [orderId]
+                );
+                const [productionRows] = await db.query(
+                  "SELECT COUNT(*) AS count FROM `productions` p JOIN `orders_schedule` os ON os.id = p.scheduleId WHERE os.orderId = ?",
+                  [orderId]
+                );
+                const [dispatchRows] = await db.query(
+                  "SELECT COUNT(*) AS count FROM `dispatch_plans` dp LEFT JOIN `productions` p ON p.id = dp.productionId LEFT JOIN `orders_schedule` os ON os.id = p.scheduleId WHERE dp.orderId = ? OR os.orderId = ?",
+                  [orderId, orderId]
+                );
+                const committedQty = Number((scheduleRows as any[])[0]?.committedQty || 0);
+                const hasLinkedActivity =
+                  Number((scheduleRows as any[])[0]?.scheduleCount || 0) > 0 ||
+                  Number((productionRows as any[])[0]?.count || 0) > 0 ||
+                  Number((dispatchRows as any[])[0]?.count || 0) > 0;
+
+                if ((itemChanged || companyChanged) && hasLinkedActivity) {
+                  return res.status(409).json({
+                    error: "Item or company cannot be changed after this order has downstream scheduled, produced, or dispatched activity.",
+                  });
+                }
+                if (nextQty < committedQty) {
+                  return res.status(409).json({
+                    error: `Order quantity cannot be reduced below committed quantity (${committedQty}).`,
+                  });
+                }
               }
             }
           }
