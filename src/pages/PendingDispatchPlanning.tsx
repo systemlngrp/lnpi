@@ -13,12 +13,28 @@ import { formatDispatchPlanNo, getNextDispatchPlanNo } from "../lib/dispatchPlan
 import { ArrowUpDown, Save } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { ExcelExport } from "../components/ExcelExport";
 
 type SortKey = "scheduledDate" | "orderNo" | "companyName" | "itemName" | "pendingQty";
+
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getTomorrowDateInput = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return toDateInputValue(tomorrow);
+};
 
 export function PendingDispatchPlanning() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState(getTomorrowDateInput);
 
 
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -40,10 +56,6 @@ export function PendingDispatchPlanning() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(23, 59, 59, 999);
-
   const isFfgFilled = (value: unknown) => {
     if (value === null || value === undefined) return false;
     const asString = String(value).trim();
@@ -160,9 +172,9 @@ export function PendingDispatchPlanning() {
       
       const effectivePlanned = getEffectivePlannedForSchedule(s.id);
       const balance = Number(s.qty || 0) - Number(s.canceledQty || 0) - effectivePlanned;
-      return scheduledDate <= tomorrow && balance > 0;
-    }).sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
-  }, [schedules, tomorrow, getEffectivePlannedForSchedule]);
+      return balance > 0;
+    });
+  }, [schedules, getEffectivePlannedForSchedule]);
 
   const availableCompanies = useMemo(() => {
     const compIds = new Set(basePendingSchedules.map(s => {
@@ -175,6 +187,9 @@ export function PendingDispatchPlanning() {
 
   const filteredSchedules = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    const hasInvalidDateRange = Boolean(fromDate && toDate && fromDate > toDate);
+    if (hasInvalidDateRange) return [];
+
     const rows = !selectedCompanyId ? basePendingSchedules : basePendingSchedules.filter(s => {
       const order = orders.find(o => o.id === s.orderId);
       return order?.companyId === selectedCompanyId;
@@ -182,6 +197,12 @@ export function PendingDispatchPlanning() {
 
     return [...rows]
       .filter((schedule) => {
+        const scheduleDate = new Date(schedule.scheduledDate);
+        if (isNaN(scheduleDate.getTime())) return false;
+        const scheduleDateInput = toDateInputValue(scheduleDate);
+        if (fromDate && scheduleDateInput < fromDate) return false;
+        if (toDate && scheduleDateInput > toDate) return false;
+
         if (!normalizedSearch) return true;
         const order = orders.find((o) => o.id === schedule.orderId);
         const company = companies.find((c) => c.id === order?.companyId);
@@ -228,7 +249,24 @@ export function PendingDispatchPlanning() {
 
       return sortDirection === "asc" ? compare : -compare;
     });
-  }, [basePendingSchedules, selectedCompanyId, orders, companies, searchTerm, sortDirection, sortKey, getEffectivePlannedForSchedule, resolveOrderItem]);
+  }, [basePendingSchedules, selectedCompanyId, orders, companies, searchTerm, fromDate, toDate, sortDirection, sortKey, getEffectivePlannedForSchedule, resolveOrderItem]);
+
+  const excelRows = useMemo(() => filteredSchedules.map((schedule) => {
+    const order = orders.find((row) => row.id === schedule.orderId);
+    const company = companies.find((row) => row.id === order?.companyId);
+    const item = resolveOrderItem(order);
+    const effectivePlanned = getEffectivePlannedForSchedule(schedule.id);
+    const balance = Math.max(0, Number(schedule.qty || 0) - Number(schedule.canceledQty || 0) - effectivePlanned);
+
+    return {
+      "Scheduled Date": formatDate(schedule.scheduledDate),
+      "Order No": order?.orderNo || "-",
+      "Company": company?.name || "-",
+      "Item Name": item?.name || "-",
+      "Pending Qty": balance,
+      "Planned Qty": rowPlannedQty[schedule.id] !== undefined ? Number(rowPlannedQty[schedule.id] || 0) : balance,
+    };
+  }), [filteredSchedules, orders, companies, resolveOrderItem, getEffectivePlannedForSchedule, rowPlannedQty]);
 
   const {
     page,
@@ -511,6 +549,32 @@ export function PendingDispatchPlanning() {
             </div>
 
             <div className="space-y-1">
+              <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Schedule Date From</div>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setSelectedIds(new Set());
+                }}
+                className="border-2 border-black rounded px-3 py-1.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Schedule Date To</div>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setSelectedIds(new Set());
+                }}
+                className="border-2 border-black rounded px-3 py-1.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1">
               <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Filter by Company</div>
               <select 
                 value={selectedCompanyId}
@@ -527,16 +591,32 @@ export function PendingDispatchPlanning() {
               </select>
             </div>
             
-            {(selectedCompanyId || searchTerm) && (
+            <ExcelExport
+              data={excelRows}
+              fileName={`Pending_Dispatch_Planning_${toDateInputValue(new Date())}`}
+              sheetName="Pending Dispatch"
+              className="mb-0.5"
+            />
+
+            {(selectedCompanyId || searchTerm || fromDate || toDate !== getTomorrowDateInput()) && (
               <button 
                 onClick={() => {
                   setSelectedCompanyId("");
                   setSearchTerm("");
+                  setFromDate("");
+                  setToDate(getTomorrowDateInput());
+                  setSelectedIds(new Set());
                 }}
                 className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
               >
                 Reset
               </button>
+            )}
+
+            {fromDate && toDate && fromDate > toDate && (
+              <div className="basis-full text-xs font-bold text-red-600">
+                From Date cannot be later than To Date.
+              </div>
             )}
           </div>
         </div>
