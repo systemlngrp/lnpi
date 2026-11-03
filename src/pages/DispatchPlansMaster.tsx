@@ -10,11 +10,21 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { ExcelExport } from "../components/ExcelExport";
+
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export function DispatchPlansMaster() {
   const [searchTerm, setSearchTerm] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
   const [itemFilter, setItemFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
 
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -159,6 +169,7 @@ export function DispatchPlansMaster() {
         itemErp,
         itemKey,
         pending,
+        planDate: String(plan.date || "").slice(0, 10),
         searchText: [
           plan.planNo,
           formatDate(plan.date),
@@ -192,17 +203,35 @@ export function DispatchPlansMaster() {
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [dispatchFilterRows]);
 
-  const filteredPlans = useMemo(() => {
+  const filteredPlanRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (fromDate && toDate && fromDate > toDate) return [];
+
     return dispatchFilterRows
       .filter((row) => {
         if (companyFilter && row.companyName !== companyFilter) return false;
         if (itemFilter && row.itemKey !== itemFilter) return false;
+        if (fromDate && row.planDate < fromDate) return false;
+        if (toDate && row.planDate > toDate) return false;
         return !normalizedSearch || row.searchText.includes(normalizedSearch);
       })
-      .map((row) => row.plan)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [companyFilter, dispatchFilterRows, itemFilter, searchTerm]);
+      .sort((a, b) => new Date(b.plan.date).getTime() - new Date(a.plan.date).getTime());
+  }, [companyFilter, dispatchFilterRows, fromDate, itemFilter, searchTerm, toDate]);
+
+  const filteredPlans = useMemo(() => filteredPlanRows.map((row) => row.plan), [filteredPlanRows]);
+
+  const excelRows = useMemo(() => filteredPlanRows.map((row) => ({
+    "Plan No": row.plan.planNo || "-",
+    "Plan Date": formatDate(row.plan.date),
+    "Company": row.companyName || "-",
+    "Order No": orders.find((order) => order.id === row.plan.orderId)?.orderNo || "-",
+    "Item Name": row.itemName || "-",
+    "Planned Qty": Number(row.plan.plannedQty || 0),
+    "Invoice Qty / Loaded Qty": Number(row.plan.loadedQty || 0),
+    "Cancelled Qty": Number(row.plan.canceledQty || 0),
+    "Pending Qty": row.pending,
+    "Status": row.plan.status || "-",
+  })), [filteredPlanRows, orders]);
   const {
     page,
     setPage,
@@ -218,12 +247,42 @@ export function DispatchPlansMaster() {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Dispatch Plans Master</h2>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_minmax(150px,auto)_minmax(150px,auto)_auto] xl:items-center">
         <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search plan, order, ERP, company, item..." />
         <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
         <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
-        {(searchTerm || companyFilter || itemFilter) ? (
-          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        <label className="text-[10px] font-bold uppercase tracking-wide text-black">
+          Plan Date From
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="mt-1 w-full rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+        </label>
+        <label className="text-[10px] font-bold uppercase tracking-wide text-black">
+          Plan Date To
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="mt-1 w-full rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExcelExport
+            data={excelRows}
+            fileName={`Dispatch_Plans_Master_${toDateInputValue(new Date())}`}
+            sheetName="Dispatch Plans"
+          />
+          {(searchTerm || companyFilter || itemFilter || fromDate || toDate) ? (
+            <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); setFromDate(""); setToDate(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+          ) : null}
+        </div>
+        {fromDate && toDate && fromDate > toDate ? (
+          <div className="text-xs font-bold text-red-600 md:col-span-2 xl:col-span-full">
+            From Date cannot be later than To Date.
+          </div>
         ) : null}
       </div>
 
