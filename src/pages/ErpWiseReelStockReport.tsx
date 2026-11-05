@@ -7,7 +7,9 @@ import {
   Material,
   MaterialIn,
   MaterialInPackingSlip,
+  MaterialIssue,
   MaterialIssueReelLine,
+  MaterialReturn,
   MaterialReturnReelLine,
 } from "../types";
 import { buildReelStockRows } from "../lib/reelStock";
@@ -42,12 +44,37 @@ function formatQty(value: number) {
   return Number(value || 0).toFixed(2);
 }
 
+function parseAppDate(value?: string | null) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const onlyDate = trimmed.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(onlyDate)) {
+    const [year, month, day] = onlyDate.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeDate(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export function ErpWiseReelStockReport() {
   const [materials] = useData<Material>("materials", [], { cacheToLocalStorage: false });
   const [materialIn] = useData<MaterialIn>("material-in", [], { cacheToLocalStorage: false });
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", [], { cacheToLocalStorage: false });
+  const [issueEntries] = useData<MaterialIssue>("material-issues", [], { cacheToLocalStorage: false });
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
+  const [returnEntries] = useData<MaterialReturn>("material-returns", [], { cacheToLocalStorage: false });
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
+  const [uptoDate, setUptoDate] = useState(() => toDateInput(new Date()));
   const [searchTerm, setSearchTerm] = useState("");
   const [mrrFilter, setMrrFilter] = useState("");
   const [erpFilter, setErpFilter] = useState("");
@@ -55,13 +82,33 @@ export function ErpWiseReelStockReport() {
   const [gsmFilter, setGsmFilter] = useState("");
   const [bfFilter, setBfFilter] = useState("");
 
+  const filteredTimestamp = useMemo(() => {
+    const parsed = parseAppDate(uptoDate);
+    return parsed ? normalizeDate(parsed).getTime() : normalizeDate(new Date()).getTime();
+  }, [uptoDate]);
+
+  const issueMap = useMemo(() => new Map(issueEntries.map((entry) => [entry.id, entry])), [issueEntries]);
+  const returnMap = useMemo(() => new Map(returnEntries.map((entry) => [entry.id, entry])), [returnEntries]);
+
   const allReelRows = useMemo(() => buildReelStockRows({
     materials,
     materialIn,
     packingSlips,
     issueReelLines,
     returnReelLines,
-  }), [issueReelLines, materialIn, materials, packingSlips, returnReelLines]);
+    includeMaterialIn: (entry) => {
+      const entryDate = parseAppDate(entry.date || entry.timestamp);
+      return Boolean(entryDate && normalizeDate(entryDate).getTime() <= filteredTimestamp);
+    },
+    includeIssueLine: (line) => {
+      const issueDate = parseAppDate(issueMap.get(line.materialIssueId)?.date);
+      return Boolean(issueDate && normalizeDate(issueDate).getTime() <= filteredTimestamp);
+    },
+    includeReturnLine: (line) => {
+      const returnDate = parseAppDate(returnMap.get(line.materialReturnId)?.date);
+      return Boolean(returnDate && normalizeDate(returnDate).getTime() <= filteredTimestamp);
+    },
+  }), [filteredTimestamp, issueEntries, issueMap, issueReelLines, materialIn, materials, packingSlips, returnEntries, returnMap, returnReelLines]);
 
   const allRows = useMemo<ReelStockRow[]>(() => {
     const sourceReelRows = mrrFilter
@@ -157,7 +204,16 @@ export function ErpWiseReelStockReport() {
     [rows]
   );
 
-  const hasActiveFilters = Boolean(searchTerm || mrrFilter || erpFilter || sizeFilter || gsmFilter || bfFilter);
+  const todayDate = toDateInput(new Date());
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+    mrrFilter ||
+    erpFilter ||
+    sizeFilter ||
+    gsmFilter ||
+    bfFilter ||
+    uptoDate !== todayDate
+  );
 
 
   const excelRows = useMemo(
@@ -202,6 +258,7 @@ export function ErpWiseReelStockReport() {
     [rows, totals]
   );
   const clearFilters = () => {
+    setUptoDate(toDateInput(new Date()));
     setSearchTerm("");
     setMrrFilter("");
     setErpFilter("");
@@ -215,6 +272,7 @@ export function ErpWiseReelStockReport() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">ERP Wise Reel Stock</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-600">Stock as of {uptoDate}</p>
         </div>
       </div>
 
@@ -234,7 +292,7 @@ export function ErpWiseReelStockReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(140px,1fr))_auto] xl:items-center">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_150px_repeat(5,minmax(140px,1fr))_auto] xl:items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
@@ -245,6 +303,14 @@ export function ErpWiseReelStockReport() {
               className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
+          <input
+            type="date"
+            value={uptoDate}
+            onChange={(e) => setUptoDate(e.target.value)}
+            title="Upto Date"
+            aria-label="Upto Date"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
           <Select value={mrrFilter} onChange={setMrrFilter} options={mrrOptions} placeholder="All MRR" />
           <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
           <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
