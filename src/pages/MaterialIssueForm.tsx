@@ -27,6 +27,7 @@ import {
   syncProductionWorkflowFromUsage,
 } from "../lib/productionMaterialUsage";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { canEditNonJobIssues, useAuth } from "../auth/AuthContext";
 
 type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string; rate?: number };
 
@@ -123,6 +124,7 @@ function formatMoney(value?: number) {
 }
 
 export function MaterialIssueForm() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
 
   // Simple DOM-based table row filter bound to the search input
@@ -169,6 +171,8 @@ export function MaterialIssueForm() {
   const npdItems = useNpdItems();
 
   const requestedDate = normalizeDate(searchParams.get("date"));
+  const editId = String(searchParams.get("edit") || "").trim();
+  const editingIssue = useMemo(() => materialIssues.find((issue) => issue.id === editId) || null, [editId, materialIssues]);
   const lockDate = searchParams.get("lockDate") === "1";
   const lockIssueType = searchParams.get("lockIssueType") === "1";
   const requestedIssueTypeRaw = String(searchParams.get("issueType") || "").trim();
@@ -188,6 +192,7 @@ export function MaterialIssueForm() {
   const [currentQty, setCurrentQty] = useState<number | "">("");
   const [lines, setLines] = useState<IssueLineDraft[]>([]);
   const [selectedReels, setSelectedReels] = useState<Record<string, string[]>>({});
+  const editHydratedRef = useRef<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessingScan, setIsProcessingScan] = useState(false);
@@ -341,6 +346,37 @@ export function MaterialIssueForm() {
   const selectedProduction = productions.find((production) => production.id === productionId);
   const showNonJobValuation = isWithoutJobIssue(issueType);
   const issueLinesTotalAmount = lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+
+  useEffect(() => {
+    if (editId && user && !canEditNonJobIssues(user)) {
+      alert("Only Admin or an active CFO can edit non-job issues.");
+      navigate("/material-movement/non-job-issue-master", { replace: true });
+    }
+  }, [editId, navigate, user]);
+
+  useEffect(() => {
+    if (!editId || !editingIssue || editHydratedRef.current === editId) return;
+    const existingLines = materialIssueLines.filter((line) => line.materialIssueId === editId);
+    const existingReels = materialIssueReelLines.filter((line) => line.materialIssueId === editId);
+    const reelLineIds = new Set(existingReels.map((line) => line.materialIssueLineId));
+    setDate(normalizeDate(editingIssue.date));
+    setIssueType("Without Job");
+    setProductionId("");
+    setRemarks(editingIssue.remarks || "");
+    setLines(existingLines.map((line) => ({
+      id: line.id,
+      materialId: line.materialId,
+      qty: Number(line.qty || 0),
+      uom: line.uom || "",
+      isReel: reelLineIds.has(line.id),
+      lastPurchaseRate: Number(line.lastPurchaseRate || 0),
+      openingRate: Number(line.openingRate || 0),
+      rate: Number(line.rate || 0),
+      amount: Number(line.amount || 0),
+    })));
+    setSelectedReels({});
+    editHydratedRef.current = editId;
+  }, [editId, editingIssue, materialIssueLines, materialIssueReelLines]);
 
   const getMaterial = (materialId: string) => issueMaterials.find((material) => material.id === materialId);
   const isNpdConsumableOption = (materialIdOrOption: string | IssueMaterialOption | undefined | null) => {
@@ -588,13 +624,13 @@ export function MaterialIssueForm() {
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const issueId = crypto.randomUUID();
-      const issueNo = generateTransactionNo(
+      const issueId = editId || crypto.randomUUID();
+      const issueNo = editingIssue?.issueNo || generateTransactionNo(
         "MIS",
         materialIssues.map((row) => ({ transactionNo: row.issueNo, date: row.date })),
         date
       );
-      const consumptionTransactionNo = isWithoutJobIssue(issueType)
+      const consumptionTransactionNo = editingIssue?.consumptionTransactionNo || (isWithoutJobIssue(issueType)
         ? generateTransactionNo(
             "CON",
             materialIssues
@@ -602,7 +638,7 @@ export function MaterialIssueForm() {
               .map((row) => ({ transactionNo: row.consumptionTransactionNo, date: row.date })),
             date
           )
-        : undefined;
+        : undefined);
 
       const issue: MaterialIssue = {
         id: issueId,
@@ -613,7 +649,7 @@ export function MaterialIssueForm() {
         productionId: issueType === "Job" ? productionId : undefined,
         jobNo: issueType === "Job" ? (selectedProduction?.transactionNo || "") : undefined,
         remarks: remarks.trim() || undefined,
-        tallyPostingStatus: isWithoutJobIssue(issueType) ? "Pending" : undefined,
+        tallyPostingStatus: editingIssue?.tallyPostingStatus || (isWithoutJobIssue(issueType) ? "Pending" : undefined),
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -622,7 +658,7 @@ export function MaterialIssueForm() {
       const nextReelLines: MaterialIssueReelLine[] = [];
 
       lines.forEach((line) => {
-        const issueLineId = crypto.randomUUID();
+        const issueLineId = editId ? line.id : crypto.randomUUID();
         const savedQty = round2(Number(line.qty || 0));
         let savedRate = round2(Number(line.rate || 0));
         let savedAmount = calculateMaterialIssueAmount(savedQty, savedRate);
@@ -681,10 +717,27 @@ export function MaterialIssueForm() {
         }
       });
 
-      await setMaterialIssues([issue, ...materialIssues]);
-      await setMaterialIssueLines([...materialIssueLines, ...nextLines]);
-      if (nextReelLines.length > 0) {
-        await setMaterialIssueReelLines([...materialIssueReelLines, ...nextReelLines]);
+      if (editId) {
+        const token = window.localStorage.getItem("authToken") || "";
+        const response = await fetch(`/api/material-issues/${encodeURIComponent(editId)}/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ issue, lines: nextLines, reelLines: nextReelLines }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Failed to update non-job issue.");
+        const savedIssue = result.issue || issue;
+        const savedLines = Array.isArray(result.lines) ? result.lines : nextLines;
+        const savedReelLines = Array.isArray(result.reelLines) ? result.reelLines : nextReelLines;
+        setMaterialIssues((prev) => prev.map((entry) => entry.id === editId ? savedIssue : entry));
+        setMaterialIssueLines((prev) => [...prev.filter((line) => line.materialIssueId !== editId), ...savedLines]);
+        setMaterialIssueReelLines((prev) => [...prev.filter((line) => line.materialIssueId !== editId), ...savedReelLines]);
+      } else {
+        await setMaterialIssues([issue, ...materialIssues]);
+        await setMaterialIssueLines([...materialIssueLines, ...nextLines]);
+        if (nextReelLines.length > 0) {
+          await setMaterialIssueReelLines([...materialIssueReelLines, ...nextReelLines]);
+        }
       }
       if (issueType === "Job" && productionId) {
         const nextMaterialIssues = [issue, ...materialIssues];
@@ -723,14 +776,14 @@ export function MaterialIssueForm() {
       setCurrentQty("");
       setLines([]);
       setSelectedReels({});
-      alert(
+      alert(editId ? `Material Issue updated: ${issueNo}` : (
         isWithoutJobIssue(issueType) && consumptionTransactionNo
           ? `Material Issue created with Issue No: ${issueNo} | Consumption No: ${consumptionTransactionNo}`
           : `Material Issue created with Issue No: ${issueNo}`
-      );
+      ));
 
       // Redirect back to relevant pending view
-      if (isWithoutJobIssue(issueType)) {
+      if (editId || isWithoutJobIssue(issueType)) {
         navigate("/material-movement/pending-non-job-issue");
       } else {
         navigate("/production/pending-consumption");
@@ -750,7 +803,7 @@ export function MaterialIssueForm() {
       </div>
 
       <div className="bg-white p-3 md:p-6 rounded shadow-sm border border-black text-black">
-      <h2 className="text-lg md:text-xl font-bold text-black mb-4 md:mb-6 uppercase tracking-tight border-b border-black pb-2">Material Issue Form</h2>
+      <h2 className="text-lg md:text-xl font-bold text-black mb-4 md:mb-6 uppercase tracking-tight border-b border-black pb-2">{editId ? "Edit Non-Job Issue" : "Material Issue Form"}</h2>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Date" required className={issueType === "Job" ? "hidden md:block" : ""}>
@@ -1046,7 +1099,7 @@ export function MaterialIssueForm() {
                 <Spinner size={16} className="text-white border-white" />
                 <span>Saving...</span>
               </div>
-            ) : "Save Issue"}
+            ) : editId ? "Update" : "Save Issue"}
           </button>
         </div>
       </form>

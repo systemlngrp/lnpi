@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { canEditNonJobIssues, useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
-import { ChevronDown, ChevronRight, XCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, Edit, XCircle } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { calculateMaterialIssueAmount, resolveMaterialIssueRate } from "../lib/materialMovement";
 
@@ -86,7 +86,9 @@ export function NonJobIssueMaster() {
   }, [issueLines, materialNameMap]);
 
   const canCancelIssues = String(user?.email || "").trim().toLowerCase() === CANCEL_ALLOWED_EMAIL;
-  const mainTableColSpan = canCancelIssues ? 9 : 8;
+  const canEditIssues = canEditNonJobIssues(user);
+  const showActions = canCancelIssues || canEditIssues;
+  const mainTableColSpan = showActions ? 9 : 8;
 
   const issueTotalsByIssueId = useMemo(() => {
     const totalsMap = new Map<string, { totalQty: number; totalValue: number }>();
@@ -319,7 +321,7 @@ export function NonJobIssueMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Qty</th>
                 <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Value</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
-                {canCancelIssues ? <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th> : null}
+                {showActions ? <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black">
@@ -356,17 +358,31 @@ export function NonJobIssueMaster() {
                         <td className="px-4 py-3 text-right text-sm font-black text-slate-800">{issueTotals.totalQty.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right text-sm font-black text-emerald-700">{formatMoney(issueTotals.totalValue)}</td>
                         <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
-                        {canCancelIssues ? (
+                        {showActions ? (
                           <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              title={cancellingId === row.id ? "Confirm cancel" : "Cancel"}
-                              onClick={() => handleCancel(row)}
-                              disabled={String(row.tallyPostingStatus || "").trim().toLowerCase() === "cancelled"}
-                              className={`${cancellingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 disabled:cursor-not-allowed disabled:text-slate-400 font-bold inline-flex items-center justify-end`}
-                            >
-                              <XCircle size={16} />
-                            </button>
+                            <div className="inline-flex items-center justify-end gap-3">
+                              {canEditIssues ? (
+                                <button
+                                  type="button"
+                                  title="Edit"
+                                  onClick={() => { window.location.href = `/material-movement/issue?edit=${encodeURIComponent(row.id)}`; }}
+                                  className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              ) : null}
+                              {canCancelIssues ? (
+                                <button
+                                  type="button"
+                                  title={cancellingId === row.id ? "Confirm cancel" : "Cancel"}
+                                  onClick={() => handleCancel(row)}
+                                  disabled={String(row.tallyPostingStatus || "").trim().toLowerCase() === "cancelled"}
+                                  className={`${cancellingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 disabled:cursor-not-allowed disabled:text-slate-400 font-bold inline-flex items-center justify-end`}
+                                >
+                                  <XCircle size={16} />
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                         ) : null}
                       </tr>

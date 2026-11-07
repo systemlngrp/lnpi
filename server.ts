@@ -68,6 +68,14 @@ function canEditOrders(user: AuthUser | null) {
   );
 }
 
+function canEditNonJobIssues(user: AuthUser | null) {
+  return Boolean(
+    user &&
+      user.status === "Active" &&
+      (user.role === "Admin" || String(user.designation || "").trim().toLowerCase() === "cfo")
+  );
+}
+
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
 const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24); // 24h
 const GLOBAL_ITEM_RENAME_ALLOWED_EMAIL = "pankaj@bizskilledu.com";
@@ -2848,7 +2856,7 @@ async function ensureGatePassNullableColumns(db: mysql.Pool, database: string) {
   }
 }
 
-async function getExistingColumnNames(db: mysql.Pool, database: string, table: string) {
+async function getExistingColumnNames(db: mysql.Pool | mysql.PoolConnection, database: string, table: string) {
   const [rows] = await db.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
     [database, table]
@@ -9759,6 +9767,114 @@ app.post("/api/settings/item-transfer/apply", async (req, res) => {
     connection.release();
   }
 });
+app.post("/api/material-issues/:id/edit", requireAuth, async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!canEditNonJobIssues(user)) return res.status(403).json({ error: "Only Admin or an active CFO can edit non-job issues." });
+
+  const issueId = String(req.params.id || "").trim();
+  const issue = req.body?.issue || {};
+  const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+  const reelLines = Array.isArray(req.body?.reelLines) ? req.body.reelLines : [];
+  if (!issueId) return res.status(400).json({ error: "Issue ID is required." });
+  if (!String(issue.date || "").trim()) return res.status(400).json({ error: "Issue date is required." });
+  if (!String(issue.remarks || "").trim()) return res.status(400).json({ error: "Remarks are required for a non-job issue." });
+  if (!lines.length) return res.status(400).json({ error: "At least one issue item is required." });
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const connection = await db.getConnection();
+  const timestamp = new Date().toISOString();
+  const updatedBy = resolveAuditActorName(user);
+
+  try {
+    await connection.beginTransaction();
+    const [existingRows] = await connection.query("SELECT * FROM `material_issues` WHERE `id` = ? LIMIT 1", [issueId]);
+    const existing = (existingRows as any[])[0];
+    if (!existing) {
+      await connection.rollback();
+      return res.status(404).json({ error: "Non-job issue not found." });
+    }
+    if (!isWithoutJobIssueType(existing.issueType) || !isWithoutJobIssueType(issue.issueType || existing.issueType)) {
+      await connection.rollback();
+      return res.status(400).json({ error: "Only non-job issues can be edited here." });
+    }
+
+    const [existingLineRows] = await connection.query("SELECT `id` FROM `material_issue_lines` WHERE `materialIssueId` = ?", [issueId]);
+    const existingLineIds = new Set((existingLineRows as any[]).map((row) => String(row.id || "").trim()).filter(Boolean));
+    const normalizedLines = lines.map((line: any) => ({
+      id: existingLineIds.has(String(line.id || "").trim()) ? String(line.id).trim() : crypto.randomUUID(),
+      materialIssueId: issueId,
+      materialId: String(line.materialId || "").trim(),
+      qty: Number(line.qty || 0),
+      uom: String(line.uom || "").trim(),
+      lastPurchaseRate: Number(line.lastPurchaseRate || 0),
+      openingRate: Number(line.openingRate || 0),
+      rate: Number(line.rate || 0),
+      amount: Number(line.amount || 0),
+    }));
+    if (normalizedLines.some((line: any) => !line.materialId || !line.uom || !Number.isFinite(line.qty) || line.qty <= 0)) {
+      await connection.rollback();
+      return res.status(400).json({ error: "Every issue item must have a material, UOM, and positive quantity." });
+    }
+
+    const wasPosted = String(existing.tallyPostingStatus || "").trim().toLowerCase() === "posted";
+    const nextIssue = {
+      date: String(issue.date).slice(0, 50),
+      remarks: String(issue.remarks).trim(),
+      updatedBy,
+      updateTimestamp: timestamp,
+      tallyPostingStatus: wasPosted ? "Pending" : existing.tallyPostingStatus || "Pending",
+      tallyTimestamp: wasPosted ? null : existing.tallyTimestamp,
+      tallyVoucherNo: wasPosted ? null : existing.tallyVoucherNo,
+      tallyVoucherDate: wasPosted ? null : existing.tallyVoucherDate,
+      tallyVoucherType: wasPosted ? null : existing.tallyVoucherType,
+      tallyVoucherId: wasPosted ? null : existing.tallyVoucherId,
+      tallyPostedBy: wasPosted ? null : existing.tallyPostedBy,
+      tallyPostingRemark: wasPosted ? null : existing.tallyPostingRemark,
+      tallyPostingError: wasPosted ? null : existing.tallyPostingError,
+      tallyLastAttemptAt: wasPosted ? null : existing.tallyLastAttemptAt,
+      tallyPostingAttemptCount: wasPosted ? 0 : Number(existing.tallyPostingAttemptCount || 0),
+    };
+
+    await connection.query(
+      "UPDATE `material_issues` SET `date` = ?, `remarks` = ?, `tallyPostingStatus` = ?, `tallyTimestamp` = ?, `tallyVoucherNo` = ?, `tallyVoucherDate` = ?, `tallyVoucherType` = ?, `tallyVoucherId` = ?, `tallyPostedBy` = ?, `tallyPostingRemark` = ?, `tallyPostingError` = ?, `tallyLastAttemptAt` = ?, `tallyPostingAttemptCount` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE `id` = ?",
+      [nextIssue.date, nextIssue.remarks, nextIssue.tallyPostingStatus, nextIssue.tallyTimestamp, nextIssue.tallyVoucherNo, nextIssue.tallyVoucherDate, nextIssue.tallyVoucherType, nextIssue.tallyVoucherId, nextIssue.tallyPostedBy, nextIssue.tallyPostingRemark, nextIssue.tallyPostingError, nextIssue.tallyLastAttemptAt, nextIssue.tallyPostingAttemptCount, nextIssue.updatedBy, nextIssue.updateTimestamp, issueId]
+    );
+
+    await connection.query("DELETE FROM `material_issue_reel_lines` WHERE `materialIssueId` = ?", [issueId]);
+    await connection.query("DELETE FROM `material_issue_lines` WHERE `materialIssueId` = ?", [issueId]);
+    for (const line of normalizedLines) {
+      await connection.query(
+        "INSERT INTO `material_issue_lines` (`id`, `materialIssueId`, `materialId`, `qty`, `uom`, `lastPurchaseRate`, `openingRate`, `rate`, `amount`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [line.id, issueId, line.materialId, line.qty, line.uom, line.lastPurchaseRate, line.openingRate, line.rate, line.amount, updatedBy, timestamp]
+      );
+    }
+    for (const line of reelLines) {
+      await connection.query(
+        "INSERT INTO `material_issue_reel_lines` (`id`, `materialIssueId`, `materialIssueLineId`, `materialId`, `packingSlipId`, `ourReelNo`, `weightKg`, `productionId`, `jobNo`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [String(line.id || crypto.randomUUID()), issueId, String(line.materialIssueLineId || ""), String(line.materialId || ""), String(line.packingSlipId || ""), String(line.ourReelNo || ""), Number(line.weightKg || 0), String(line.productionId || ""), String(line.jobNo || ""), updatedBy, timestamp]
+      );
+    }
+
+    await connection.commit();
+    const [issueRows] = await connection.query("SELECT * FROM `material_issues` WHERE `id` = ? LIMIT 1", [issueId]);
+    const [lineRows] = await connection.query("SELECT * FROM `material_issue_lines` WHERE `materialIssueId` = ?", [issueId]);
+    const [reelRows] = await connection.query("SELECT * FROM `material_issue_reel_lines` WHERE `materialIssueId` = ?", [issueId]);
+    return res.json({
+      issue: normalizeFetchedRow("material_issues", (issueRows as any[])[0]),
+      lines: (lineRows as any[]).map((row) => normalizeFetchedRow("material_issue_lines", row)),
+      reelLines: (reelRows as any[]).map((row) => normalizeFetchedRow("material_issue_reel_lines", row)),
+    });
+  } catch (error) {
+    try { await connection.rollback(); } catch {}
+    console.error("[DB] Non-job issue edit failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  } finally {
+    connection.release();
+  }
+});
+
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

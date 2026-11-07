@@ -20,6 +20,14 @@ export function canEditOrders(user: AuthUser | null) {
   );
 }
 
+export function canEditNonJobIssues(user: AuthUser | null) {
+  return Boolean(
+    user &&
+      user.status === "Active" &&
+      (user.role === "Admin" || String(user.designation || "").trim().toLowerCase() === "cfo")
+  );
+}
+
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
