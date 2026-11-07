@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { canEditNonJobIssues, useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
@@ -32,6 +33,7 @@ function formatMoney(value?: number) {
 }
 
 export function NonJobIssueMaster() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materials] = useData<Material>("materials", []);
@@ -365,7 +367,7 @@ export function NonJobIssueMaster() {
                                 <button
                                   type="button"
                                   title="Edit"
-                                  onClick={() => { window.location.href = `/material-movement/issue?edit=${encodeURIComponent(row.id)}`; }}
+                                  onClick={() => navigate(`/material-movement/non-job-issue-master/edit?edit=${encodeURIComponent(row.id)}`)}
                                   className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center"
                                 >
                                   <Edit size={16} />

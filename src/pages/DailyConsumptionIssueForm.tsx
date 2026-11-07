@@ -1,18 +1,28 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { useData } from "../hooks/useData";
 import { generateTransactionNo } from "../lib/serial";
 import { Material, MaterialIssue, MaterialIssueLine } from "../types";
+import { canEditNonJobIssues, useAuth } from "../auth/AuthContext";
 
 type ConsumptionLine = {
   id: string;
   materialId: string;
   qty: number;
+  rate?: number;
+  lastPurchaseRate?: number;
+  openingRate?: number;
+  amount?: number;
 };
 
 export function DailyConsumptionIssueForm() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = String(searchParams.get("edit") || "").trim();
   const [materials] = useData<Material>("materials", []);
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines, setMaterialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -23,6 +33,36 @@ export function DailyConsumptionIssueForm() {
   const [currentQty, setCurrentQty] = useState<number | "">("");
   const [lines, setLines] = useState<ConsumptionLine[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydratedEditRef = useRef<string | null>(null);
+
+  const editingIssue = useMemo(
+    () => materialIssues.find((issue) => issue.id === editId) || null,
+    [editId, materialIssues]
+  );
+
+  useEffect(() => {
+    if (editId && user && !canEditNonJobIssues(user)) {
+      alert("Only Admin or an active CFO can edit non-job issues.");
+      navigate("/material-movement/non-job-issue-master", { replace: true });
+    }
+  }, [editId, navigate, user]);
+
+  useEffect(() => {
+    if (!editId || !editingIssue || hydratedEditRef.current === editId) return;
+    const existingLines = materialIssueLines.filter((line) => line.materialIssueId === editId);
+    setDate(String(editingIssue.date || "").slice(0, 10));
+    setRemarks(editingIssue.remarks || "");
+    setLines(existingLines.map((line) => ({
+      id: line.id,
+      materialId: line.materialId,
+      qty: Number(line.qty || 0),
+      rate: Number(line.rate || 0),
+      lastPurchaseRate: Number(line.lastPurchaseRate || 0),
+      openingRate: Number(line.openingRate || 0),
+      amount: Number(line.amount || 0),
+    })));
+    hydratedEditRef.current = editId;
+  }, [editId, editingIssue, materialIssueLines]);
 
   const materialOptions = useMemo(
     () =>
@@ -37,8 +77,8 @@ export function DailyConsumptionIssueForm() {
   );
 
   const generalIssuesForDate = useMemo(
-    () => materialIssues.filter((issue) => issue.issueType === "General" && (issue.date || "").split("T")[0] === date),
-    [materialIssues, date]
+    () => materialIssues.filter((issue) => issue.issueType === "General" && issue.id !== editId && (issue.date || "").split("T")[0] === date),
+    [editId, materialIssues, date]
   );
 
   const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
@@ -58,7 +98,11 @@ export function DailyConsumptionIssueForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!date || lines.length === 0) return;
-    if (generalIssuesForDate.length > 0) {
+    if (editId && !remarks.trim()) {
+      alert("Remarks are mandatory when editing a non-job issue.");
+      return;
+    }
+    if (!editId && generalIssuesForDate.length > 0) {
       alert("Daily Consumption (General) issue already exists for this date.");
       return;
     }
@@ -66,28 +110,28 @@ export function DailyConsumptionIssueForm() {
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const issueId = crypto.randomUUID();
-      const issueNo = generateTransactionNo(
+      const issueId = editId || crypto.randomUUID();
+      const issueNo = editingIssue?.issueNo || generateTransactionNo(
         "MIS",
         materialIssues.map((row) => ({ transactionNo: row.issueNo, date: row.date })),
         date
       );
-      const consumptionTransactionNo = generateTransactionNo(
-        "CON",
-        materialIssues
-          .filter((row) => String(row.issueType || "").trim().toLowerCase() === "general" || String(row.issueType || "").trim().toLowerCase() === "without job")
-          .map((row) => ({ transactionNo: row.consumptionTransactionNo, date: row.date })),
-        date
-      );
+      const consumptionTransactionNo = editingIssue?.consumptionTransactionNo || generateTransactionNo(
+          "CON",
+          materialIssues
+            .filter((row) => String(row.issueType || "").trim().toLowerCase() === "general" || String(row.issueType || "").trim().toLowerCase() === "without job")
+            .map((row) => ({ transactionNo: row.consumptionTransactionNo, date: row.date })),
+          date
+        );
 
       const issue: MaterialIssue = {
         id: issueId,
         issueNo,
         consumptionTransactionNo,
         date,
-        issueType: "General",
+        issueType: editingIssue?.issueType || "General",
         remarks: remarks.trim() || undefined,
-        tallyPostingStatus: "Pending",
+        tallyPostingStatus: editingIssue?.tallyPostingStatus || "Pending",
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -95,25 +139,49 @@ export function DailyConsumptionIssueForm() {
       const createdLines: MaterialIssueLine[] = lines.map((line) => {
         const material = getMaterial(line.materialId);
         return {
-          id: crypto.randomUUID(),
+          id: editId ? line.id : crypto.randomUUID(),
           materialIssueId: issueId,
           materialId: line.materialId,
           qty: Number(Number(line.qty || 0).toFixed(2)),
+          lastPurchaseRate: Number(line.lastPurchaseRate || 0),
+          openingRate: Number(line.openingRate || 0),
+          rate: Number(line.rate || 0),
+          amount: Number(line.amount || 0),
           uom: material?.uom || "",
           updatedBy: "System User",
           updateTimestamp: timestamp,
         };
       });
 
-      await setMaterialIssues([issue, ...materialIssues]);
-      await setMaterialIssueLines([...materialIssueLines, ...createdLines]);
+      if (editId) {
+        const token = window.localStorage.getItem("authToken") || "";
+        const response = await fetch(`/api/material-issues/${encodeURIComponent(editId)}/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ issue, lines: createdLines, reelLines: [] }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Failed to update daily consumption.");
+        const savedIssue = result.issue || issue;
+        const savedLines = Array.isArray(result.lines) ? result.lines : createdLines;
+        setMaterialIssues((prev) => prev.map((entry) => entry.id === editId ? savedIssue : entry));
+        setMaterialIssueLines((prev) => [...prev.filter((line) => line.materialIssueId !== editId), ...savedLines]);
+      } else {
+        await setMaterialIssues([issue, ...materialIssues]);
+        await setMaterialIssueLines([...materialIssueLines, ...createdLines]);
+      }
 
       setDate(new Date().toISOString().split("T")[0]);
       setRemarks("");
       setCurrentMaterialId("");
       setCurrentQty("");
       setLines([]);
-      alert(`Daily Consumption saved with Issue No: ${issueNo} | Consumption No: ${consumptionTransactionNo}`);
+      if (editId) {
+        alert(`Daily Consumption updated: ${issueNo}`);
+        navigate("/material-movement/non-job-issue-master");
+      } else {
+        alert(`Daily Consumption saved with Issue No: ${issueNo} | Consumption No: ${consumptionTransactionNo}`);
+      }
     } catch (error) {
       console.error("Failed to save daily consumption issue:", error);
       alert("Failed to save daily consumption issue.");
@@ -124,7 +192,7 @@ export function DailyConsumptionIssueForm() {
 
   return (
     <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
-      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Daily Consumption Issue</h2>
+      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">{editId ? "Edit Daily Consumption" : "Daily Consumption Issue"}</h2>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -132,7 +200,7 @@ export function DailyConsumptionIssueForm() {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full border-2 border-black rounded p-2" />
           </Field>
           <Field label="Issue No (Auto)">
-            <input type="text" value="Generated on Submit" disabled className="w-full border-2 border-black rounded p-2 bg-slate-50 opacity-70" />
+            <input type="text" value={editingIssue?.issueNo || "Generated on Submit"} disabled className="w-full border-2 border-black rounded p-2 bg-slate-50 opacity-70" />
           </Field>
           <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3 text-sm font-bold">
             Daily Consumption (General) issues on {date}: {generalIssuesForDate.length}
@@ -183,10 +251,10 @@ export function DailyConsumptionIssueForm() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting || lines.length === 0 || generalIssuesForDate.length > 0}
+            disabled={isSubmitting || lines.length === 0 || (!editId && generalIssuesForDate.length > 0)}
             className="min-w-[180px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
           >
-            {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Daily Consumption"}
+            {isSubmitting ? <Spinner size={22} className="text-white" /> : editId ? "Update Daily Consumption" : "Save Daily Consumption"}
           </button>
         </div>
       </form>

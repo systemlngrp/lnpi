@@ -277,6 +277,7 @@ export default function App() {
           <Route path="material-movement/pending-non-job-issue" element={<PendingNonJobMaterialIssue />} />
           <Route path="material-movement/pending-consumption-tally" element={<PendingConsumptionTallyPosting />} />
           <Route path="material-movement/non-job-issue-master" element={<NonJobIssueMaster />} />
+          <Route path="material-movement/non-job-issue-master/edit" element={<DailyConsumptionIssueForm />} />
           <Route path="material-movement/return" element={<MaterialReturnForm />} />
           <Route path="material-movement/return-master" element={<MaterialReturnMaster />} />
 
